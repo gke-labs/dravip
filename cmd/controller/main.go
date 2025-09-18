@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"runtime/debug"
 	"sync/atomic"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -18,6 +19,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/klog/v2"
 )
 
@@ -26,8 +29,14 @@ const (
 )
 
 var (
-	kubeconfig  string
-	bindAddress string
+	kubeconfig       string
+	bindAddress      string
+	leaderElection   bool
+	leaderElectionID string
+	leaderElectionNS string
+	leaseDuration    time.Duration
+	renewDeadline    time.Duration
+	retryPeriod      time.Duration
 
 	ready atomic.Bool
 )
@@ -35,6 +44,12 @@ var (
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
 	flag.StringVar(&bindAddress, "bind-address", ":9177", "The IP address and port for the metrics and healthz server to serve on")
+	flag.BoolVar(&leaderElection, "leader-elect", true, "Enable leader election for controller manager. Ensuring only one active controller.")
+	flag.StringVar(&leaderElectionID, "leader-elect-lock-name", "dravip-controller", "The name of the resource lock for leader election")
+	flag.StringVar(&leaderElectionNS, "leader-elect-lock-namespace", "kube-system", "The namespace for the resource lock for leader election")
+	flag.DurationVar(&leaseDuration, "leader-elect-lease-duration", 15*time.Second, "The duration that non-leader candidates will wait to force acquire leadership")
+	flag.DurationVar(&renewDeadline, "leader-elect-renew-deadline", 10*time.Second, "The duration that the acting master will retry refreshing leadership before giving up")
+	flag.DurationVar(&retryPeriod, "leader-elect-retry-period", 2*time.Second, "The duration the LeaderElector clients should wait between tries of actions")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", controllerName)
@@ -105,12 +120,58 @@ func main() {
 
 	// controller logic here
 	controller := NewController(controllerName, clientset, informerFactory.Resource().V1().ResourceClaims())
-	go controller.Run(ctx)
 
-	informerFactory.Start(ctx.Done())
+	if leaderElection {
+		// Leader election setup
+		lock, err := resourcelock.New(
+			resourcelock.LeasesResourceLock,
+			leaderElectionNS,
+			leaderElectionID,
+			clientset.CoreV1(),
+			clientset.CoordinationV1(),
+			resourcelock.ResourceLockConfig{
+				Identity: getLeaderID(),
+			},
+		)
+		if err != nil {
+			klog.Fatalf("Failed to create resource lock: %v", err)
+		}
 
-	ready.Store(true)
-	klog.Info("driver started")
+		// Leader election configuration
+		leaderelection.RunOrDie(ctx, leaderelection.LeaderElectionConfig{
+			Lock:          lock,
+			LeaseDuration: leaseDuration,
+			RenewDeadline: renewDeadline,
+			RetryPeriod:   retryPeriod,
+			Callbacks: leaderelection.LeaderCallbacks{
+				OnStartedLeading: func(ctx context.Context) {
+					klog.Info("Started leading, starting controller")
+					go controller.Run(ctx)
+					informerFactory.Start(ctx.Done())
+					ready.Store(true)
+					klog.Info("Controller started successfully")
+				},
+				OnStoppedLeading: func() {
+					klog.Info("Lost leadership, stopping controller")
+					ready.Store(false)
+				},
+				OnNewLeader: func(identity string) {
+					if identity != getLeaderID() {
+						klog.Infof("New leader elected: %s", identity)
+					}
+				},
+			},
+			ReleaseOnCancel: true,
+			Name:            controllerName,
+		})
+	} else {
+		// Run without leader election
+		klog.Info("Leader election disabled, starting controller directly")
+		go controller.Run(ctx)
+		informerFactory.Start(ctx.Done())
+		ready.Store(true)
+		klog.Info("Controller started successfully")
+	}
 
 	select {
 	case <-signalCh:
@@ -119,6 +180,16 @@ func main() {
 	case <-ctx.Done():
 		klog.Infof("Exiting: context cancelled")
 	}
+}
+
+// getLeaderID returns a unique identifier for this controller instance
+func getLeaderID() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		klog.Warningf("Failed to get hostname: %v", err)
+		hostname = "unknown"
+	}
+	return fmt.Sprintf("%s_%d", hostname, os.Getpid())
 }
 
 func printVersion() {

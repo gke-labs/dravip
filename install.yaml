@@ -123,3 +123,130 @@ spec:
         hostPath:
           path: /etc
 ---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dravip-controller
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - "resource.k8s.io"
+    resources:
+      - resourceclaims
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "resource.k8s.io"
+    resources:
+      - resourceslices
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - "resource.k8s.io"
+    resources:
+      - deviceclasses
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - "coordination.k8s.io"
+    resources:
+      - leases
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dravip-controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dravip-controller
+subjects:
+- kind: ServiceAccount
+  name: dravip-controller
+  namespace: kube-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dravip-controller
+  namespace: kube-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dravip-controller
+  namespace: kube-system
+  labels:
+    tier: control-plane
+    app: dravip-controller
+    k8s-app: dravip-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dravip-controller
+  template:
+    metadata:
+      labels:
+        tier: control-plane
+        app: dravip-controller
+        k8s-app: dravip-controller
+    spec:
+      serviceAccountName: dravip-controller
+      containers:
+      - name: controller
+        args:
+        - /controller
+        - --v=4
+        - --driver-name=dravip
+        image: aojea/dravip:stable
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "50Mi"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65534
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 9177
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 9177
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---

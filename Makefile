@@ -7,10 +7,10 @@ export GOROOT GO111MODULE CGO_ENABLED
 build: build-driver build-controller
 
 build-driver:
-	go build -v -o "$(OUT_DIR)/$(BINARY_NAME)" ./cmd/driver
+	go build -v -o "$(OUT_DIR)/driver" ./cmd/driver
 
 build-controller:
-	go build -v -o "$(OUT_DIR)/$(BINARY_NAME)" ./cmd/controller
+	go build -v -o "$(OUT_DIR)/controller" ./cmd/controller
 
 clean:
 	rm -rf "$(OUT_DIR)/"
@@ -25,24 +25,31 @@ lint:
 update:
 	go mod tidy
 
-# get image name from directory we're building
-IMAGE_NAME=simple-knd
-# docker image registry, default to upstream
-REGISTRY?=aojea/simple-knd:stable
-IMAGE?=$(REGISTRY)/$(IMAGE_NAME)
+# Container image configuration
+REGISTRY?=aojea
 # tag based on date-sha
 TAG?=$(shell echo "$$(date +v%Y%m%d)-$$(git describe --always --dirty)")
-TAGGED_IMAGE?=$(REGISTRY)/$(IMAGE_NAME):$(TAG)
+
+# Driver image configuration
+DRIVER_IMAGE_NAME=dravip
+DRIVER_IMAGE?=$(REGISTRY)/$(DRIVER_IMAGE_NAME)
+DRIVER_TAGGED_IMAGE?=$(REGISTRY)/$(DRIVER_IMAGE_NAME):$(TAG)
+
+# Controller image configuration  
+CONTROLLER_IMAGE_NAME=dravip-controller
+CONTROLLER_IMAGE?=$(REGISTRY)/$(CONTROLLER_IMAGE_NAME)
+CONTROLLER_TAGGED_IMAGE?=$(REGISTRY)/$(CONTROLLER_IMAGE_NAME):$(TAG)
 
 # required to enable buildx
 export DOCKER_CLI_EXPERIMENTAL=enabled
-image:
-# docker buildx build --platform=${PLATFORMS} $(OUTPUT) --progress=$(PROGRESS) -t ${IMAGE} --pull $(EXTRA_BUILD_OPT) .
-	docker build --network host . -t ${TAGGED_IMAGE}
-	docker tag ${TAGGED_IMAGE} ${IMAGE}:stable
 
-KIND_CLUSTER_NAME?=dra
-kind-image: image
-	kind load docker-image ${IMAGE}:stable --name ${KIND_CLUSTER_NAME}
-	kubectl delete -f install.yaml || true
-	kubectl apply -f install.yaml
+# Build driver container image
+image-driver:
+	docker build --network host . -t ${DRIVER_TAGGED_IMAGE} --target driver --load
+
+# Build controller container image
+image-controller:
+	docker build --network host . -t ${CONTROLLER_TAGGED_IMAGE} --target controller --load
+
+# Build both images
+images: image-driver image-controller

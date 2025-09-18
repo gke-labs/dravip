@@ -9,8 +9,15 @@ ENV CGO_ENABLED=0
 WORKDIR /go/src/app
 COPY . .
 RUN go mod download
-RUN CGO_ENABLED=0 go build -o /go/bin/driver .
+RUN CGO_ENABLED=0 go build -o /go/bin/driver ./cmd/driver
+RUN CGO_ENABLED=0 go build -o /go/bin/controller ./cmd/controller
 
-FROM gcr.io/distroless/base-debian12
+# Driver image
+FROM gcr.io/distroless/base-debian12 AS driver
 COPY --from=builder --chown=root:root /go/bin/driver /driver
 CMD ["/driver"]
+
+# Controller image
+FROM gcr.io/distroless/base-debian12 AS controller
+COPY --from=builder --chown=root:root /go/bin/controller /controller
+CMD ["/controller"]

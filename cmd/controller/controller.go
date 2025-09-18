@@ -22,7 +22,10 @@ type Controller struct {
 }
 
 // NewController creates a new controller framework instance.
-func NewController(controllerName string, kubeClient kubernetes.Interface, resourceInformer resourcev1informers.ResourceClaimInformer) *Controller {
+func NewController(controllerName string,
+	kubeClient kubernetes.Interface,
+	resourceInformer resourcev1informers.ResourceClaimInformer,
+) *Controller {
 	c := &Controller{
 		controllerName:      controllerName,
 		kubeClient:          kubeClient,
