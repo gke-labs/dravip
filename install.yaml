@@ -2,7 +2,7 @@
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: simple-knd
+  name: dravip
 rules:
   - apiGroups:
       - ""
@@ -38,79 +38,54 @@ rules:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: simple-knd
+  name: dravip
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: simple-knd
+  name: dravip
 subjects:
 - kind: ServiceAccount
-  name: simple-knd
+  name: dravip
   namespace: kube-system
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: simple-knd
+  name: dravip
   namespace: kube-system
 ---
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: simple-knd
+  name: dravip
   namespace: kube-system
   labels:
     tier: node
-    app: simple-knd
-    k8s-app: simple-knd
+    app: dravip
+    k8s-app: dravip
 spec:
   selector:
     matchLabels:
-      app: simple-knd
+      app: dravip
   template:
     metadata:
       labels:
         tier: node
-        app: simple-knd
-        k8s-app: simple-knd
+        app: dravip
+        k8s-app: dravip
     spec:
       hostNetwork: true
       tolerations:
       - operator: Exists
         effect: NoSchedule
-      serviceAccountName: simple-knd
+      serviceAccountName: dravip
       hostPID: true
-      initContainers:
-      - name: enable-nri
-        image: busybox:stable
-        volumeMounts:
-        - mountPath: /etc
-          name: etc
-        securityContext:
-          privileged: true
-        command:
-        - /bin/sh
-        - -c
-        - |
-          set -o errexit
-          set -o pipefail
-          set -o nounset
-          set -x
-          if grep -q "io.containerd.nri.v1.nri" /etc/containerd/config.toml
-          then
-             echo "containerd config contains NRI reference already; taking no action"
-          else
-             echo "containerd config does not mention NRI, thus enabling it";
-             printf '%s\n' "[plugins.\"io.containerd.nri.v1.nri\"]" "  disable = false" "  disable_connections = false" "  plugin_config_path = \"/etc/nri/conf.d\"" "  plugin_path = \"/opt/nri/plugins\"" "  plugin_registration_timeout = \"5s\"" "  plugin_request_timeout = \"5s\"" "  socket_path = \"/var/run/nri/nri.sock\"" >> /etc/containerd/config.toml
-             echo "restarting containerd"
-             nsenter -t 1 -m -u -i -n -p -- systemctl restart containerd
-          fi
       containers:
       - name: driver
         args:
         - /driver
         - --v=4
-        image: aojea/simple-knd:stable
+        image: aojea/dravip:stable
         resources:
           requests:
             cpu: "100m"

@@ -14,21 +14,20 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
-	nodeutil "k8s.io/component-helpers/node/util"
 	"k8s.io/klog/v2"
 )
 
 const (
-	driverName = "simple-knd"
+	controllerName = "dravip-controller"
 )
 
 var (
-	hostnameOverride string
-	kubeconfig       string
-	bindAddress      string
+	kubeconfig  string
+	bindAddress string
 
 	ready atomic.Bool
 )
@@ -36,10 +35,9 @@ var (
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "absolute path to the kubeconfig file")
 	flag.StringVar(&bindAddress, "bind-address", ":9177", "The IP address and port for the metrics and healthz server to serve on")
-	flag.StringVar(&hostnameOverride, "hostname-override", "", "If non-empty, will be used as the name of the Node is running on. If unset, the node name is assumed to be the same as the node's hostname.")
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", driverName)
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", controllerName)
 		flag.PrintDefaults()
 	}
 }
@@ -91,10 +89,7 @@ func main() {
 		klog.Fatalf("can not create client-go client: %v", err)
 	}
 
-	nodeName, err := nodeutil.GetHostname(hostnameOverride)
-	if err != nil {
-		klog.Fatalf("can not obtain the node name, use the hostname-override flag if you want to set it to a specific value: %v", err)
-	}
+	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 
 	// trap Ctrl+C and call cancel on the context
 	ctx := context.Background()
@@ -108,13 +103,12 @@ func main() {
 	}()
 	signal.Notify(signalCh, os.Interrupt, unix.SIGINT)
 
-	opts := []Option{}
+	// controller logic here
+	controller := NewController(controllerName, clientset, informerFactory.Resource().V1().ResourceClaims())
+	go controller.Run(ctx)
 
-	knd, err := Start(ctx, driverName, clientset, nodeName, opts...)
-	if err != nil {
-		klog.Fatalf("driver failed to start: %v", err)
-	}
-	defer knd.Stop()
+	informerFactory.Start(ctx.Done())
+
 	ready.Store(true)
 	klog.Info("driver started")
 
@@ -141,5 +135,5 @@ func printVersion() {
 			vcsTime = f.Value
 		}
 	}
-	klog.Infof("%s go %s build: %s time: %s", driverName, info.GoVersion, vcsRevision, vcsTime)
+	klog.Infof("%s go %s build: %s time: %s", controllerName, info.GoVersion, vcsRevision, vcsTime)
 }

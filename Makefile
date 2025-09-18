@@ -1,12 +1,16 @@
 REPO_ROOT:=${CURDIR}
 OUT_DIR=$(REPO_ROOT)/bin
-BINARY_NAME?=simple-knd
 # disable CGO by default for static binaries
 CGO_ENABLED=0
 export GOROOT GO111MODULE CGO_ENABLED
 
-build:
-	go build -v -o "$(OUT_DIR)/$(BINARY_NAME)" .
+build: build-driver build-controller
+
+build-driver:
+	go build -v -o "$(OUT_DIR)/$(BINARY_NAME)" ./cmd/driver
+
+build-controller:
+	go build -v -o "$(OUT_DIR)/$(BINARY_NAME)" ./cmd/controller
 
 clean:
 	rm -rf "$(OUT_DIR)/"
