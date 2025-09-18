@@ -225,8 +225,7 @@ spec:
         args:
         - /controller
         - --v=4
-        - --driver-name=dravip
-        image: aojea/dravip:stable
+        image: aojea/dravip-controller:stable
         resources:
           requests:
             cpu: "100m"
