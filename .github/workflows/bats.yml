@@ -14,7 +14,7 @@ env:
   GO_VERSION: "1.24"
   K8S_VERSION: "v1.34.0"
   KIND_VERSION: "v0.30.0"
-  IMAGE_NAME: aojea/simple-knd
+  IMAGE_NAME: ghcr.io/gke-labs/dravip
   KIND_CLUSTER_NAME: kind
 
 jobs:

@@ -85,7 +85,7 @@ spec:
         args:
         - /driver
         - --v=4
-        image: aojea/dravip:stable
+        image: ghcr.io/gke-labs/dravip:stable
         resources:
           requests:
             cpu: "100m"
@@ -225,7 +225,7 @@ spec:
         args:
         - /controller
         - --v=4
-        image: aojea/dravip-controller:stable
+        image: ghcr.io/gke-labs/dravip-controller:stable
         resources:
           requests:
             cpu: "100m"

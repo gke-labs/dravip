@@ -26,7 +26,7 @@ update:
 	go mod tidy
 
 # Container image configuration
-REGISTRY?=aojea
+REGISTRY?=ghcr.io/gke-labs
 # tag based on date-sha
 TAG?=$(shell echo "$$(date +v%Y%m%d)-$$(git describe --always --dirty)")
 
