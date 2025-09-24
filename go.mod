@@ -1,4 +1,4 @@
-module dravip
+module github.com/gke-labs/dravipå
 
 go 1.24.3
 
