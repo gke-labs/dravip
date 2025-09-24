@@ -50,7 +50,7 @@ func NewController(controllerName string,
 		queue:               workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: controllerName}),
 	}
 
-	resourceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+	_, _ = resourceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 			if err == nil {
