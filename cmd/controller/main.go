@@ -27,6 +27,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gke-labs/dravip/pkg/ipam"
+	"github.com/gke-labs/dravip/pkg/ipam/gce"
+	"github.com/gke-labs/dravip/pkg/ipam/kind"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"golang.org/x/sys/unix"
@@ -54,6 +57,12 @@ var (
 	renewDeadline    time.Duration
 	retryPeriod      time.Duration
 
+	// IPAM Provider flags
+	ipamProvider string
+	kindCIDR     string
+	gceProjectID string
+	gceRegion    string
+
 	ready atomic.Bool
 )
 
@@ -66,6 +75,12 @@ func init() {
 	flag.DurationVar(&leaseDuration, "leader-elect-lease-duration", 15*time.Second, "The duration that non-leader candidates will wait to force acquire leadership")
 	flag.DurationVar(&renewDeadline, "leader-elect-renew-deadline", 10*time.Second, "The duration that the acting master will retry refreshing leadership before giving up")
 	flag.DurationVar(&retryPeriod, "leader-elect-retry-period", 2*time.Second, "The duration the LeaderElector clients should wait between tries of actions")
+
+	// IPAM Provider flags
+	flag.StringVar(&ipamProvider, "ipam-provider", "kind", "The IPAM provider to use (e.g., 'kind', 'gce')")
+	flag.StringVar(&kindCIDR, "kind-cidr", "192.168.200.0/24", "The CIDR for the KIND IPAM provider")
+	flag.StringVar(&gceProjectID, "gce-project-id", "", "The GCP Project ID for the GCE IPAM provider")
+	flag.StringVar(&gceRegion, "gce-region", "", "The GCP Region for the GCE IPAM provider")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", controllerName)
@@ -120,6 +135,26 @@ func main() {
 		klog.Fatalf("can not create client-go client: %v", err)
 	}
 
+	// Initialize the IPAM provider based on the flag
+	var provider ipam.IPAMProvider
+	switch ipamProvider {
+	case "kind":
+		provider, err = kind.NewKindIPAMProvider(clientset, kindCIDR)
+		if err != nil {
+			klog.Fatalf("Failed to create KIND IPAM provider: %v", err)
+		}
+		klog.Info("Using KIND IPAM provider")
+	case "gce":
+		provider, err = gce.NewGCEIPAMProvider(clientset, gceProjectID, gceRegion)
+		if err != nil {
+			klog.Fatalf("Failed to create GCE IPAM provider: %v", err)
+		}
+		klog.Info("Using GCE IPAM provider")
+
+	default:
+		klog.Fatalf("Invalid --ipam-provider specified: %s", ipamProvider)
+	}
+
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 
 	// trap Ctrl+C and call cancel on the context
@@ -135,7 +170,7 @@ func main() {
 	signal.Notify(signalCh, os.Interrupt, unix.SIGINT)
 
 	// controller logic here
-	controller := NewController(controllerName, clientset, informerFactory.Resource().V1().ResourceClaims())
+	controller := NewController(controllerName, clientset, informerFactory.Resource().V1().ResourceClaims(), provider)
 
 	if leaderElection {
 		// Leader election setup

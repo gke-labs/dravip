@@ -119,9 +119,6 @@ spec:
       - name: netns
         hostPath:
           path: /var/run/netns
-      - name: etc
-        hostPath:
-          path: /etc
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1

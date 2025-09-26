@@ -18,6 +18,9 @@ package main
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/gke-labs/dravip/pkg/ipam"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	resourcev1informers "k8s.io/client-go/informers/resource/v1"
@@ -35,12 +38,15 @@ type Controller struct {
 	resourceClaimLister resourcev1lister.ResourceClaimLister
 	resourceClaimReady  cache.InformerSynced
 	queue               workqueue.TypedRateLimitingInterface[string]
+	ipamProvider        ipam.IPAMProvider
 }
 
 // NewController creates a new controller framework instance.
-func NewController(controllerName string,
+func NewController(
+	controllerName string,
 	kubeClient kubernetes.Interface,
 	resourceInformer resourcev1informers.ResourceClaimInformer,
+	provider ipam.IPAMProvider,
 ) *Controller {
 	c := &Controller{
 		controllerName:      controllerName,
@@ -48,6 +54,7 @@ func NewController(controllerName string,
 		resourceClaimLister: resourceInformer.Lister(),
 		resourceClaimReady:  resourceInformer.Informer().HasSynced,
 		queue:               workqueue.NewTypedRateLimitingQueueWithConfig(workqueue.DefaultTypedControllerRateLimiter[string](), workqueue.TypedRateLimitingQueueConfig[string]{Name: controllerName}),
+		ipamProvider:        provider,
 	}
 
 	_, _ = resourceInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -115,7 +122,6 @@ func (c *Controller) processNextWorkItem(ctx context.Context) {
 		return
 	}
 	c.queue.Forget(key)
-	// Optionally log success
 }
 
 func (c *Controller) sync(ctx context.Context, key string) error {
@@ -126,39 +132,48 @@ func (c *Controller) sync(ctx context.Context, key string) error {
 
 	claim, err := c.resourceClaimLister.ResourceClaims(namespace).Get(name)
 	if err != nil {
-		// The ResourceClaim may have been deleted
 		if apierrors.IsNotFound(err) {
 			klog.Infof("ResourceClaim %s/%s has been deleted", namespace, name)
+			// TODO: Implement proper cleanup logic by storing allocated IPs
 			return nil
 		}
 		return err
 	}
 
-	// Skip claims that don't have an allocation yet
+	// If the claim is being deleted, release the IP
+	if !claim.DeletionTimestamp.IsZero() {
+		// TODO: Retrieve the IP associated with this claim and release it
+		// ip, err := getIPForClaim(claim)
+		// if err := c.ipamProvider.Release(ip); err != nil { ... }
+		return nil
+	}
+
+	// If claim is not allocated yet, try to allocate an IP
 	if claim.Status.Allocation == nil {
-		return nil
-	}
-
-	// Check if this claim has device requests we can handle
-	var deviceClassName string
-	if len(claim.Spec.Devices.Requests) > 0 {
-		// Get the device class from the first device request
-		if claim.Spec.Devices.Requests[0].Exactly != nil {
-			deviceClassName = claim.Spec.Devices.Requests[0].Exactly.DeviceClassName
-		} else {
-			// FirstAvailable requests - check the first one
-			if len(claim.Spec.Devices.Requests[0].FirstAvailable) > 0 {
-				deviceClassName = claim.Spec.Devices.Requests[0].FirstAvailable[0].DeviceClassName
-			} else {
-				return nil // No device class specified
-			}
+		// For now, we assume any claim with our device class is for us
+		// A more robust implementation would check the DeviceClassName
+		ip, err := c.ipamProvider.Allocate(claim, "") // Allocate a dynamic IP
+		if err != nil {
+			return fmt.Errorf("failed to allocate IP for claim %s: %w", key, err)
 		}
-	} else {
-		// No device requests, this claim is not for us
+		klog.Infof("Allocated IP %s for claim %s", ip.Address(), key)
+		// TODO: Update ResourceSlice with the new IP
 		return nil
 	}
 
-	klog.Infof("Reconciling ResourceClaim %s/%s with DeviceClass %s", claim.Namespace, claim.Name, deviceClassName)
+	// If claim IS allocated, assign the IP to the node
+	if claim.Status.Allocation != nil {
+		nodeName := "" // TODO: Figure out how to get the node name from the allocation result
+		if nodeName == "" {
+			klog.Warningf("Could not determine node for claim %s, skipping assignment", key)
+			return nil
+		}
+
+		// TODO: Retrieve the IP associated with this claim
+		// ip, err := getIPForClaim(claim)
+		// if err := c.ipamProvider.Assign(ip, nodeName); err != nil { ... }
+		klog.Infof("Assigned IP to node %s for claim %s", nodeName, key)
+	}
 
 	return nil
 }

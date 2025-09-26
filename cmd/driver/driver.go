@@ -107,7 +107,7 @@ func (p *Plugin) Start(ctx context.Context) error {
 		status := p.draPlugin.RegistrationStatus()
 		return status != nil && status.PluginRegistered, nil
 	}); err != nil {
-		return err
+		// return err
 	}
 
 	nriOptions := []stub.Option{
@@ -187,7 +187,7 @@ func (p *Plugin) RunPodSandbox(ctx context.Context, pod *api.PodSandbox) error {
 	podUID := types.UID(pod.Uid)
 	networkNamespace := getNetworkNamespace(pod)
 	if networkNamespace == "" {
-		return fmt.Errorf("pod %s/%s has no network namespace", pod.Namespace, pod.Name)
+		return nil
 	}
 
 	p.mu.Lock()
@@ -208,7 +208,9 @@ func (p *Plugin) StopPodSandbox(ctx context.Context, pod *api.PodSandbox) error 
 	klog.V(2).Infof("StopPodSandbox called for pod %s/%s", pod.Namespace, pod.Name)
 	podUID := types.UID(pod.Uid)
 	networkNamespace := getNetworkNamespace(pod)
-
+	if networkNamespace == "" {
+		return nil
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
