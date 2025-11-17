@@ -7,10 +7,10 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	golang.org/x/sys v0.36.0
 	google.golang.org/api v0.250.0
-	k8s.io/api v0.34.1
-	k8s.io/apimachinery v0.34.1
-	k8s.io/client-go v0.34.1
-	k8s.io/component-helpers v0.34.1
+	k8s.io/api v0.34.2
+	k8s.io/apimachinery v0.34.2
+	k8s.io/client-go v0.34.2
+	k8s.io/component-helpers v0.34.2
 	k8s.io/dynamic-resource-allocation v0.34.1
 	k8s.io/klog/v2 v2.130.1
 )
