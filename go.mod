@@ -1,11 +1,11 @@
 module github.com/gke-labs/dravip
 
-go 1.24.3
+go 1.25.0
 
 require (
 	github.com/containerd/nri v0.10.0
 	github.com/prometheus/client_golang v1.23.2
-	golang.org/x/sys v0.36.0
+	golang.org/x/sys v0.45.0
 	google.golang.org/api v0.250.0
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
@@ -66,11 +66,11 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.42.0 // indirect
-	golang.org/x/net v0.44.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
+	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/oauth2 v0.31.0 // indirect
-	golang.org/x/term v0.35.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.13.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250908214217-97024824d090 // indirect
 	google.golang.org/grpc v1.75.1 // indirect
